@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class JammoMovement : MonoBehaviour
 {
@@ -226,5 +227,9 @@ public class JammoMovement : MonoBehaviour
         currentTarget = this.transform;
         currentOffset = offsetToPlayer;
         isTrackingBall = false;
+    }
+    public void ResetGame() 
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 }
