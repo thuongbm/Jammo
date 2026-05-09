@@ -1,3 +1,6 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class JammoMovement : MonoBehaviour
@@ -5,7 +8,7 @@ public class JammoMovement : MonoBehaviour
     [Header("Components")]
     public CharacterController controller;
     public Animator anim;
-    public GameObject kickButton; // Kéo KickButton vào đây
+    public GameObject kickButton; 
 
     [Header("Movement Settings")]
     public float speed = 8f;
@@ -13,18 +16,48 @@ public class JammoMovement : MonoBehaviour
     public float turnTime = 0.1f;
     
     [Header("Detection Settings")]
-    public float detectRadius = 2f; // Khoảng cách để hiện nút Kick
+    public float detectRadius = 2f; // Distance for kick
+    
+    [Header("Camera Control")]
+    public Camera mainCamera; 
+    public Vector3 offsetToBall = new Vector3(0, 5, -10); 
+    public Vector3 offsetToPlayer = new Vector3(0, 5, -10); 
+    public float cameraFollowSpeed = 5f;
 
+    // Following state
+    private Transform currentTarget; 
+    private Vector3 currentOffset;
+    private bool isTrackingBall = false;
+    
     float turnVelocity;
     Vector3 velocity;
-    public float kickPower = 20f; // Lực sút
+    public float kickPower = 20f; // Power
 
+    void Start()
+    {
+        currentTarget = this.transform; 
+        currentOffset = offsetToPlayer;
+    }
+    
     void Update()
     {
         if (anim == null) return;
 
         HandleMovement();
-        CheckForBall(); // Gọi hàm kiểm tra bóng mỗi khung hình
+        CheckForBall(); 
+    }
+
+    private void LateUpdate()
+    {
+        if (mainCamera != null && currentTarget != null)
+        {
+            // Calculate position
+            Vector3 desiredPosition = currentTarget.position + currentOffset;
+            
+            mainCamera.transform.position = Vector3.Lerp(mainCamera.transform.position, desiredPosition, cameraFollowSpeed * Time.deltaTime);
+            
+            mainCamera.transform.LookAt(currentTarget.position);
+        }
     }
 
     void HandleMovement()
@@ -52,7 +85,7 @@ public class JammoMovement : MonoBehaviour
 
     void CheckForBall()
     {
-        // Tìm tất cả các vật thể có Tag là "Ball" trong một phạm vi hình cầu xung quanh Jammo
+        // Check tag ball
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, detectRadius);
         bool ballNearby = false;
 
@@ -65,14 +98,13 @@ public class JammoMovement : MonoBehaviour
             }
         }
 
-        // Hiện nút nếu có bóng gần, ẩn nếu không có
+        // Hide or display button
         if (kickButton != null)
         {
             kickButton.SetActive(ballNearby);
         }
     }
-
-    // Vẽ vòng tròn đỏ trong Scene để bạn dễ quan sát phạm vi kích hoạt nút
+    
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.red;
@@ -81,7 +113,6 @@ public class JammoMovement : MonoBehaviour
     
     public void KickBall()
     {
-        // 1. Tìm quả bóng gần Jammo nhất
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, detectRadius);
         GameObject targetBall = null;
         float minDistanceBall = float.MaxValue;
@@ -101,7 +132,6 @@ public class JammoMovement : MonoBehaviour
 
         if (targetBall != null)
         {
-            // 2. Tìm khung thành gần quả bóng đó nhất
             GameObject[] goals = GameObject.FindGameObjectsWithTag("Goal");
             GameObject targetGoal = null;
             float minDistanceGoal = float.MaxValue;
@@ -118,24 +148,83 @@ public class JammoMovement : MonoBehaviour
 
             if (targetGoal != null)
             {
-                // 3. Thực hiện cú sút
                 Rigidbody ballRb = targetBall.GetComponent<Rigidbody>();
                 if (ballRb != null)
                 {
-                    // Tính toán hướng từ bóng đến khung thành
-                    // Chúng ta cộng thêm một chút độ cao (Vector3.up) để bóng bay bổng lên
                     Vector3 shootDirection = (targetGoal.transform.position - targetBall.transform.position).normalized;
                     shootDirection += Vector3.up * 0.2f; 
-
-                    // Áp dụng lực tức thời (Impulse)
+                    
                     ballRb.AddForce(shootDirection * kickPower, ForceMode.Impulse);
                     
-                    // Chạy animation sút (nếu có trong Animator của bạn)
-                    // anim.SetTrigger("Kick"); 
-                    
-                    Debug.Log("Gooooal! Jammo đã sút bóng vào khung thành!");
+                    StartCoroutine(TrackBallAndReturn(targetBall.transform));
                 }
             }
         }
+    }
+    
+    public void AutoKickBall()
+    {
+        GameObject[] allBalls = GameObject.FindGameObjectsWithTag("Ball");
+        
+        if (allBalls.Length == 0) return; 
+
+        GameObject farthestBall = null;
+        float maxDistance = -1f;
+        
+        foreach (GameObject ball in allBalls)
+        {
+            float dist = Vector3.Distance(transform.position, ball.transform.position);
+            if (dist > maxDistance)
+            {
+                maxDistance = dist;
+                farthestBall = ball;
+            }
+        }
+
+        if (farthestBall != null)
+        {
+            GameObject[] goals = GameObject.FindGameObjectsWithTag("Goal");
+            GameObject targetGoal = null;
+            float minGoalDist = float.MaxValue;
+
+            foreach (GameObject goal in goals)
+            {
+                float dist = Vector3.Distance(farthestBall.transform.position, goal.transform.position);
+                if (dist < minGoalDist)
+                {
+                    minGoalDist = dist;
+                    targetGoal = goal;
+                }
+            }
+
+            if (targetGoal != null)
+            {
+                Rigidbody ballRb = farthestBall.GetComponent<Rigidbody>();
+                if (ballRb != null)
+                {
+                    Vector3 shootDirection = (targetGoal.transform.position - farthestBall.transform.position).normalized;
+                    
+                    shootDirection += Vector3.up * 0.25f;
+                    
+                    ballRb.AddForce(shootDirection * (kickPower * 1.2f), ForceMode.Impulse);
+                    
+                    StartCoroutine(TrackBallAndReturn(farthestBall.transform));
+                }
+            }
+        }
+    }
+    
+    private IEnumerator TrackBallAndReturn(Transform ballTransform)
+    {
+        isTrackingBall = true;
+        
+        currentTarget = ballTransform;
+        currentOffset = offsetToBall;
+        
+        yield return new WaitForSeconds(2f);
+        
+        currentTarget = this.transform;
+        currentOffset = offsetToPlayer;
+        isTrackingBall = false;
     }
 }
