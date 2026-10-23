@@ -3,7 +3,11 @@ using UnityEngine;
 public class GoalPoint : UnityEngine.MonoBehaviour
 {
     public GameObject confettiPrefab; 
-    public float destroyDelay = 5f;  
+    
+
+    // Raised when a ball enters this goal (used by JammoMovement for the camera)
+    public static event System.Action<Transform> BallScored;
+public float destroyDelay = 5f;  
 
 private void OnTriggerEnter(Collider other)
     {
@@ -20,6 +24,7 @@ private void OnTriggerEnter(Collider other)
             Destroy(effect, destroyDelay);
 
             Debug.Log("GOAL!");
+            BallScored?.Invoke(other.transform);
         }
     }
 }

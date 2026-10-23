@@ -1558,8 +1558,11 @@ MonoBehaviour:
   turnTime: 0.1
   detectRadius: 2
   mainCamera: {fileID: 874298412}
-  offsetToBall: {x: 0, y: 5, z: -10}
-  offsetToPlayer: {x: 0, y: 5, z: -10}
+  offsetToBall: {x: 0, y: 25, z: 0}
+  offsetToPlayer: {x: 0, y: 20, z: 0}
+  cameraPitch: 90
+  returnDelay: 2
+  maxTrackTime: 6
   cameraFollowSpeed: 5
   kickPower: 20
 --- !u!95 &1476582386 stripped

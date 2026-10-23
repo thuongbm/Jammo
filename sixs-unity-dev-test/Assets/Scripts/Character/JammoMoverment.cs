@@ -21,14 +21,22 @@ public class JammoMovement : MonoBehaviour
     
     [Header("Camera Control")]
     public Camera mainCamera; 
-    public Vector3 offsetToBall = new Vector3(0, 5, -10); 
-    public Vector3 offsetToPlayer = new Vector3(0, 5, -10); 
-    public float cameraFollowSpeed = 5f;
+    public Vector3 offsetToBall = new Vector3(0, 25, 0); 
+    public Vector3 offsetToPlayer = new Vector3(0, 20, 0); 
+    
+    public float cameraPitch = 90f;      // 90 = straight down (Top-Down)
+    public float returnDelay = 2f;       // wait after the ball reaches the goal
+    public float maxTrackTime = 6f;      // safety: stop tracking if the ball never scores
+public float cameraFollowSpeed = 5f;
 
     // Following state
     private Transform currentTarget; 
     private Vector3 currentOffset;
-    private bool isTrackingBall = false;
+    
+    private Transform trackedBall;
+    private bool ballScored;
+    private Coroutine trackRoutine;
+private bool isTrackingBall = false;
     
     float turnVelocity;
     Vector3 velocity;
@@ -48,16 +56,15 @@ public class JammoMovement : MonoBehaviour
         CheckForBall(); 
     }
 
-    private void LateUpdate()
+private void LateUpdate()
     {
         if (mainCamera != null && currentTarget != null)
         {
-            // Calculate position
             Vector3 desiredPosition = currentTarget.position + currentOffset;
-            
             mainCamera.transform.position = Vector3.Lerp(mainCamera.transform.position, desiredPosition, cameraFollowSpeed * Time.deltaTime);
-            
-            mainCamera.transform.LookAt(currentTarget.position);
+
+            // Fixed top-down rotation (no LookAt, so it never flips at 90 degrees)
+            mainCamera.transform.rotation = Quaternion.Euler(cameraPitch, 0f, 0f);
         }
     }
 
@@ -157,7 +164,7 @@ public class JammoMovement : MonoBehaviour
                     
                     ballRb.AddForce(shootDirection * kickPower, ForceMode.Impulse);
                     
-                    StartCoroutine(TrackBallAndReturn(targetBall.transform));
+                    StartTracking(targetBall.transform);
                 }
             }
         }
@@ -209,25 +216,60 @@ public class JammoMovement : MonoBehaviour
                     
                     ballRb.AddForce(shootDirection * (kickPower * 1.2f), ForceMode.Impulse);
                     
-                    StartCoroutine(TrackBallAndReturn(farthestBall.transform));
+                    StartTracking(farthestBall.transform);
                 }
             }
         }
     }
     
-    private IEnumerator TrackBallAndReturn(Transform ballTransform)
+private IEnumerator TrackBallAndReturn(Transform ballTransform)
     {
         isTrackingBall = true;
-        
+        trackedBall = ballTransform;
+        ballScored = false;
+
         currentTarget = ballTransform;
         currentOffset = offsetToBall;
-        
-        yield return new WaitForSeconds(2f);
-        
+
+        // Follow the ball until it reaches the goal (or the safety timeout)
+        float elapsed = 0f;
+        while (!ballScored && elapsed < maxTrackTime)
+        {
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // Wait 2s after the ball reaches the goal, then go back to the player
+        yield return new WaitForSeconds(returnDelay);
+
         currentTarget = this.transform;
         currentOffset = offsetToPlayer;
         isTrackingBall = false;
+        trackedBall = null;
+        trackRoutine = null;
     }
+
+private void StartTracking(Transform ball)
+    {
+        if (trackRoutine != null) StopCoroutine(trackRoutine);
+        trackRoutine = StartCoroutine(TrackBallAndReturn(ball));
+    }
+
+    private void OnBallScored(Transform ball)
+    {
+        if (ball == trackedBall) ballScored = true;
+    }
+
+    private void OnEnable()
+    {
+        GoalPoint.BallScored += OnBallScored;
+    }
+
+    private void OnDisable()
+    {
+        GoalPoint.BallScored -= OnBallScored;
+    }
+
     public void ResetGame() 
     {
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
